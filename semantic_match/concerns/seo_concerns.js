@@ -13,7 +13,6 @@ export const SEO_CONCERNS = {
   channel: "seo",
   meta: {
     leaf_count: 28,
-    gating: "required_any AND secondary_any (any-of each list)",
     anchors: "negative-only; 10 per leaf; each 15–30 words"
   },
   nodes: [
@@ -24,20 +23,12 @@ export const SEO_CONCERNS = {
       id: "seo",
       label: "SEO (Organic Search)",
       parent: "root",
-      gate: {
-        required_any: ["seo", "search", "google", "organic"],
-        secondary_any: ["low", "down", "dropped", "declined", "poor", "bad", "minimal", "near zero", "not"]
-      }
     },
 
     {
       id: "seo.visibility",
       label: "SEO Visibility",
       parent: "seo",
-      gate: {
-        required_any: ["visibility", "impressions", "ranking", "rankings", "position", "serp", "search results"],
-        secondary_any: ["low", "down", "dropped", "declined", "poor", "bad", "minimal", "near zero", "not"]
-      },
       clarify_question:
         "Is the issue mainly low impressions/visibility, poor rankings/positions, or poor SERP listing quality causing low clicks?"
     },
@@ -45,10 +36,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing",
       label: "SEO Indexing & Crawlability",
       parent: "seo",
-      gate: {
-        required_any: ["index", "indexed", "indexing", "crawl", "crawling", "googlebot", "robots", "search console", "gsc"],
-        secondary_any: ["error", "blocked", "excluded", "not", "missing", "failed", "limited", "issue", "problem"]
-      },
       clarify_question:
         "Is the problem index coverage (pages excluded), crawl/robots/server errors, or architecture issues like internal links, duplicates, or canonicals?"
     },
@@ -56,10 +43,6 @@ export const SEO_CONCERNS = {
       id: "seo.traffic",
       label: "SEO Traffic",
       parent: "seo",
-      gate: {
-        required_any: ["traffic", "visits", "sessions", "users"],
-        secondary_any: ["organic", "search", "google", "seo", "low", "down", "dropped", "declined", "minimal"]
-      },
       clarify_question:
         "Is organic traffic low overall, mainly content/blog traffic, or is it a recent drop versus long-term low baseline?"
     },
@@ -67,10 +50,6 @@ export const SEO_CONCERNS = {
       id: "seo.engagement",
       label: "SEO Engagement",
       parent: "seo",
-      gate: {
-        required_any: ["ctr", "click", "clicks", "bounce", "engagement", "time on page", "dwell"],
-        secondary_any: ["low", "poor", "bad", "high", "declined", "dropped", "minimal", "weak"]
-      },
       clarify_question:
         "Is the issue low CTR in search results, or are visitors from search bouncing quickly / not engaging once they land on pages?"
     },
@@ -78,10 +57,6 @@ export const SEO_CONCERNS = {
       id: "seo.conversion",
       label: "SEO Conversions",
       parent: "seo",
-      gate: {
-        required_any: ["lead", "leads", "inquiry", "inquiries", "conversion", "conversions", "form", "contact"],
-        secondary_any: ["organic", "search", "google", "seo", "low", "poor", "bad", "minimal", "declined"]
-      },
       clarify_question:
         "Are organic leads low because traffic is low, because conversion rate is poor, or because content is not assisting visitors toward inquiries?"
     },
@@ -117,10 +92,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.impressions.impressions_low",
       parent: "seo.visibility.impressions",
       label: "Search impressions are low",
-      gate: {
-        required_any: ["impressions", "visibility", "gsc", "google", "reach"],
-        secondary_any: ["low", "minimal", "near","zero", "down", "declined", "dropped", "poor"]
-      },
       anchors: [
         "Search Console shows very low impressions across our important pages, even though the site is live and accessible.",
         "Our impressions in Google Search Console are near zero for weeks, which makes search visibility feel almost nonexistent.",
@@ -138,10 +109,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.impressions.nonbrand_impressions_low",
       parent: "seo.visibility.impressions",
       label: "Non-branded impressions are low",
-      gate: {
-        required_any: ["non brand", "non-branded", "generic", "discovery"],
-        secondary_any: ["impressions", "visibility", "low", "minimal", "near zero", "missing", "poor"]
-      },
       anchors: [
         "We only get impressions for our business name, but non-branded impressions for service keywords are extremely low.",
         "Non-branded search impressions are minimal, so discovery traffic is missing and new customers cannot find us organically.",
@@ -164,10 +131,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.impressions.keyword_coverage_limited",
       parent: "seo.visibility.impressions",
       label: "Keyword coverage is limited",
-      gate: {
-        required_any: ["keyword", "keywords", "queries", "query", "coverage", "footprint", "breadth", "diversity"],
-        secondary_any: ["few","limited","small number","handful","narrow","low diversity","not many","only a few","thin coverage"]
-      },
       anchors: [
         "Search Console shows a very small number of distinct queries driving visibility across the site",
         "Keyword coverage is weak because we only appear for a handful of terms, even though we target many services.",
@@ -190,10 +153,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.impressions.branded_only_visibility",
       parent: "seo.visibility.impressions",
       label: "Visibility is mostly branded only",
-      gate: {
-        required_any: ["brand", "branded", "company name", "business name"],
-        secondary_any: ["only", "mostly", "just", "all", "traffic", "impressions", "visibility", "search"]
-      },
       anchors: [
         "Our SEO performance looks branded-only because most impressions and clicks come from people searching our company name.",
         "We only show up when customers search for our brand, but visibility for service queries remains very low.",
@@ -215,11 +174,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.rankings.avg_position_poor",
       parent: "seo.visibility.rankings",
       label: "Average position is poor",
-      gate: {
-        required_any: ["ranking", "rankings", "position", "positions", "serp"],
-        secondary_any: ["poor", "low", "bad", "down", "declined", "dropped", "beyond", "top10", "top 10"]
-      }
-      ,
       anchors: [
         "Our average position is poor for priority keywords, and we rarely appear on the first page of Google results.",
         "Rankings are far down the results, so even when we get impressions, the positions are too low to get clicks.",
@@ -237,10 +191,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.rankings.rankings_dropped",
       parent: "seo.visibility.rankings",
       label: "Rankings dropped recently",
-      gate: {
-      required_any: ["rank","ranking","rankings","position","positions","serp","page one","page 1","page two","page 2","page three","page 3","top 10","top 20","top 30","first page"],
-      secondary_any: ["dropped","drop","declined","fell","down","lost","slipped","decreased","moved down","from page","to page","last month","last week","recent"]
-      },
       anchors: [
         "Our rankings dropped recently across multiple keywords, and traffic declined at the same time without obvious site changes.",
         "We lost positions in Google for priority queries, and the ranking drop happened suddenly over a short period.",
@@ -258,10 +208,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.rankings.competitors_outranking",
       parent: "seo.visibility.rankings",
       label: "Competitors outrank us",
-      gate: {
-        required_any: ["competitor", "competitors", "others", "rivals"],
-        secondary_any: ["outrank", "above us", "rank higher", "beating us", "losing", "ahead"]
-      },
       anchors: [
         "Competitors outrank us for the keywords that matter, and our site appears below them even for our core services.",
         "Our competitors show above us in Google results, so they capture clicks and leads while we remain lower ranked.",
@@ -283,11 +229,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.snippets.snippet_not_compelling",
       parent: "seo.visibility.snippets",
       label: "Snippet not compelling (low clicks)",
-      gate: {
-        required_any: ["ctr", "click", "clicks", "snippet", "title", "meta", "serp", "listing"],
-        secondary_any: ["low", "poor", "bad", "few", "minimal", "declined", "dropped"]
-      }
-      ,
       anchors: [
         "We get impressions in Search Console but very few clicks, suggesting our search snippet is not compelling enough.",
         "People see our listing in Google results, yet they do not click, which points to weak titles and descriptions.",
@@ -305,10 +246,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.snippets.rich_results_missing",
       parent: "seo.visibility.snippets",
       label: "Rich results missing",
-      gate: {
-        required_any: ["schema", "rich", "stars", "ratings", "faq", "rich snippet", "structured data"],
-        secondary_any: ["missing", "not showing", "absent", "no", "not appearing", "gone"]
-      },
       anchors: [
         "We do not see rich results like stars, FAQs, or other enhancements in Google, and our listings look plain.",
         "Rich snippets are missing from our search listings, so competitors look more credible and get higher click-through.",
@@ -326,10 +263,6 @@ export const SEO_CONCERNS = {
       id: "seo.visibility.snippets.title_meta_weak",
       parent: "seo.visibility.snippets",
       label: "Title/meta descriptions weak",
-      gate: {
-        required_any: ["title", "titles", "meta", "description", "descriptions"],
-        secondary_any: ["weak", "poor", "bad", "not optimized", "generic", "boring", "low"]
-      },
       anchors: [
         "Our page titles are not optimized for search intent, and meta descriptions do not clearly communicate benefits or differentiation.",
         "Titles and meta descriptions feel generic, so users skip our listing even when we appear for relevant queries.",
@@ -351,10 +284,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.coverage.pages_not_indexed",
       parent: "seo.indexing.coverage",
       label: "Pages not indexed",
-      gate: {
-          required_any: ["index", "indexed", "indexing", "site:", "exact url", "url", "urls"],
-          secondary_any: ["missing","absent","never","doesn't","not","show","appear","find","google"]
-      },
       anchors: [
         "Important pages are not indexed in Google, and searching site colon for URLs does not show them in results.",
         "Search Console indicates our pages are not indexed, so they cannot rank, and organic traffic remains extremely low.",
@@ -372,10 +301,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.coverage.indexing_limited",
       parent: "seo.indexing.coverage",
       label: "Indexing is limited (many excluded)",
-      gate: {
-        required_any: ["excluded", "coverage", "index coverage", "indexed", "indexing"],
-        secondary_any: ["many", "limited", "problem", "issue", "errors", "not", "low"]
-      },
       anchors: [
         "Search Console shows many pages excluded from the index, so indexing coverage is limited and visibility is restricted.",
         "A large portion of our URLs are excluded, which reduces keyword coverage and prevents our content from ranking.",
@@ -393,10 +318,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.coverage.noindex_by_mistake",
       parent: "seo.indexing.coverage",
       label: "Noindex applied by mistake",
-      gate: {
-        required_any: ["noindex", "meta robots", "robots meta", "x robots", "x-robots-tag"],
-        secondary_any: ["mistake", "accident", "template", "tag", "directive", "coverage", "excluded"]
-      },
       anchors: [
         "We suspect a noindex tag is blocking important pages, because they are excluded and never appear in Google results.",
         "Some key pages might be set to noindex by mistake, which prevents indexing and kills organic visibility completely.",
@@ -418,10 +339,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.crawl.crawl_errors",
       parent: "seo.indexing.crawl",
       label: "Crawl errors detected",
-      gate: {
-        required_any: ["crawl error", "crawl errors", "fetch failed", "unreachable", "dns", "not found", "404", "4xx"],
-        secondary_any: ["googlebot", "search console", "gsc", "crawl", "crawling"]
-      },
       anchors: [
         "Search Console shows crawl errors, and Googlebot cannot reliably fetch important URLs, which reduces indexing and ranking.",
         "We see crawl failures for multiple pages, so Google may not discover updates, and visibility continues to decline.",
@@ -439,10 +356,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.crawl.robots_blocked",
       parent: "seo.indexing.crawl",
       label: "Robots blocking crawling",
-      gate: {
-        required_any: ["robots", "robots.txt", "blocked", "disallow"],
-        secondary_any: ["googlebot", "crawl", "crawling", "index", "indexed", "prevent", "not"]
-      },
       anchors: [
         "We think robots dot txt is blocking Googlebot, because Search Console shows blocked resources and missing indexed pages.",
         "Google cannot crawl important sections, and robots rules may be preventing crawling and indexing of key content.",
@@ -460,10 +373,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.crawl.server_errors",
       parent: "seo.indexing.crawl",
       label: "Server errors impacting crawl",
-      gate: {
-         required_any: ["5xx", "500", "502", "503", "504", "server error", "timeout", "timed out"],
-         secondary_any: ["googlebot", "crawl", "crawling", "search console", "gsc", "fetch"]
-      },
       anchors: [
         "Googlebot encounters server errors when crawling, and 5xx responses likely prevent indexing and reduce search visibility.",
         "We see server timeouts during crawling, so Google may reduce crawl rate and stop indexing updates reliably.",
@@ -485,10 +394,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.architecture.orphan_pages",
       parent: "seo.indexing.architecture",
       label: "Orphan pages",
-      gate: {
-        required_any: ["orphan", "unlinked", "not linked", "no internal links", "internal link", "internal links"],
-        secondary_any: ["index", "indexed", "discover", "crawl", "crawling", "google", "missing", "not"]
-      },
       anchors: [
         "Some pages have no internal links pointing to them, so they behave like orphan pages and are hard for Google to discover.",
         "We suspect orphan pages exist because important URLs are not linked in navigation, and they rarely appear in search.",
@@ -506,10 +411,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.architecture.internal_links_weak",
       parent: "seo.indexing.architecture",
       label: "Internal linking is weak",
-      gate: {
-        required_any: ["internal link", "internal links", "site structure", "navigation", "linking"],
-        secondary_any: ["weak", "poor", "bad", "missing", "not", "lack", "hard"]
-      },
       anchors: [
         "Internal linking is weak, so important pages lack link equity and Google may not understand which pages matter most.",
         "Our site structure does not connect related topics well, which limits crawling paths and reduces ranking strength.",
@@ -527,10 +428,6 @@ export const SEO_CONCERNS = {
       id: "seo.indexing.architecture.duplicate_content",
       parent: "seo.indexing.architecture",
       label: "Duplicate content issues",
-      gate: {
-        required_any: ["duplicate", "duplicates", "canonical", "copied", "similar content"],
-        secondary_any: ["issue", "problem", "confusing", "wrong", "not", "excluded", "ranking"]
-      },
       anchors: [
         "We have duplicate content across multiple pages, and Google may not know which version to rank for important keywords.",
         "Similar pages target the same terms, causing duplication and cannibalization that weakens rankings and search visibility.",
@@ -552,11 +449,6 @@ export const SEO_CONCERNS = {
       id: "seo.traffic.organic.organic_traffic_low",
       parent: "seo.traffic.organic",
       label: "Organic traffic is low",
-      gate: {
-        required_any: ["traffic", "visit", "visits", "session", "sessions", "users"],
-        secondary_any: ["organic", "search", "google", "seo", "low", "minimal", "near", "zero", "down", "declined", "dropped"]
-      }
-      ,
       anchors: [
         "Our website is receiving minimal search traffic, and organic sessions are near zero even though we offer relevant services.",
         "Google traffic is very low across the site, and we are not getting consistent visits from organic search results.",
@@ -574,10 +466,6 @@ export const SEO_CONCERNS = {
       id: "seo.traffic.organic.traffic_drop_recent",
       parent: "seo.traffic.organic",
       label: "Organic traffic dropped recently",
-      gate: {
-        required_any: ["organic", "search", "google", "seo"],
-        secondary_any: ["dropped", "drop", "declined", "down", "fell", "sudden", "recent"]
-      },
       anchors: [
         "Organic traffic dropped recently, and we saw a noticeable decline in Google sessions over the past few weeks.",
         "We had stable search traffic, but it suddenly fell, and we are unsure whether an update or technical change caused it.",
@@ -595,10 +483,6 @@ export const SEO_CONCERNS = {
       id: "seo.traffic.organic.traffic_flat_no_growth",
       parent: "seo.traffic.organic",
       label: "Organic traffic is flat (no growth)",
-      gate: {
-        required_any: ["organic", "search", "google", "seo"],
-        secondary_any: ["flat", "stagnant", "not growing", "no growth", "stuck", "plateau"]
-      },
       anchors: [
         "Organic search traffic is flat, and we are not seeing growth in sessions even after publishing new pages regularly.",
         "Search traffic seems stuck at the same level for months, and there is no upward trend in organic performance.",
@@ -620,10 +504,6 @@ export const SEO_CONCERNS = {
       id: "seo.traffic.content.blog_traffic_low",
       parent: "seo.traffic.content",
       label: "Blog traffic is low",
-      gate: {
-        required_any: ["blog", "blogs", "post", "posts", "article", "articles"],
-        secondary_any: ["traffic", "visits", "sessions", "organic", "search", "google", "low", "minimal", "not"]
-      },
       anchors: [
         "Our blog traffic is low, and recent posts are not getting organic visits from Google even after weeks of publishing.",
         "Blog articles are not attracting search visitors, and the content does not generate impressions or clicks in Search Console.",
@@ -641,10 +521,6 @@ export const SEO_CONCERNS = {
       id: "seo.traffic.content.informational_traffic_low",
       parent: "seo.traffic.content",
       label: "Informational traffic is low",
-      gate: {
-      required_any: ["informational", "how to", "guide", "guides", "faq", "blog", "article", "articles"],
-      secondary_any: ["traffic", "impressions", "clicks", "organic", "search", "low", "minimal", "missing"]
-      },
       anchors: [
         "Informational traffic is low, and we do not get visitors from how-to or educational queries that should bring top-of-funnel exposure.",
         "Our guides and informational pages get minimal impressions, so we are not capturing early-stage searchers in our market.",
@@ -666,11 +542,8 @@ export const SEO_CONCERNS = {
       id: "seo.engagement.ctr.organic_ctr_low",
       parent: "seo.engagement.ctr",
       label: "Organic CTR is low",
-      gate: {
-        required_any: ["ctr", "click", "clicks", "click-through", "snippet", "title", "meta"],
-        secondary_any: ["low", "poor", "bad", "declined", "dropped", "few", "minimal"]
-      },
       anchors: [
+        "Search Console shows impressions remaining stable while clicks declined sharply over a recent period, causing a measurable drop in organic CTR",
         "Organic CTR is low in Search Console, so we get impressions but few clicks from Google results.",
         "We have visibility in search, but click-through rate is poor, suggesting our titles and snippets do not persuade users.",
         "CTR from organic search is low, and competitors seem to get the clicks even when we appear on the same page.",
@@ -694,11 +567,6 @@ export const SEO_CONCERNS = {
       id: "seo.engagement.behavior.bounce_high_from_search",
       parent: "seo.engagement.behavior",
       label: "Bounce rate from search is high",
-      gate: {
-        required_any: ["bounce", "bounces", "exit", "leave"],
-        secondary_any: ["organic", "search", "google", "high", "immediately", "quickly", "poor", "bad"]
-      }
-      ,
       anchors: [
         "Bounce rate from organic search is high, and visitors leave immediately after landing, suggesting the page does not meet search intent.",
         "People click from Google and exit quickly, so the landing experience may be confusing, slow, or not aligned with the query.",
@@ -716,10 +584,6 @@ export const SEO_CONCERNS = {
       id: "seo.engagement.behavior.time_on_page_low_from_search",
       parent: "seo.engagement.behavior",
       label: "Time on page from search is low",
-      gate: {
-        required_any: ["dwell", "duration", "engagement time", "session duration", "avg session duration", "average session duration", "bounce"],
-        secondary_any: ["organic", "search", "google", "low", "short", "poor", "bad", "quickly"]
-      },
       anchors: [
         "Time on page from organic search is low, and visitors do not read content long enough to understand our services.",
         "Search users spend very little time before leaving, which suggests the page is not engaging or does not answer intent.",
@@ -741,10 +605,6 @@ export const SEO_CONCERNS = {
       id: "seo.conversion.leads.organic_leads_low",
       parent: "seo.conversion.leads",
       label: "Organic leads are low",
-      gate: {
-        required_any: ["lead", "leads", "inquiry", "inquiries", "contact", "calls", "form"],
-        secondary_any: ["organic", "search", "google", "seo", "low", "few", "minimal", "near zero"]
-      },
       anchors: [
         "Organic leads are low, and we get very few inquiries from Google search even when some traffic arrives to the site.",
         "We receive visits from organic search, but inquiries remain minimal, so SEO is not producing meaningful leads.",
@@ -762,10 +622,6 @@ export const SEO_CONCERNS = {
       id: "seo.conversion.leads.organic_conversion_rate_low",
       parent: "seo.conversion.leads",
       label: "Organic conversion rate is low",
-      gate: {
-        required_any: ["conversion rate", "converts", "converting", "conversion", "leads"],
-        secondary_any: ["organic", "search", "google", "seo", "low", "poor", "bad", "weak"]
-      },
       anchors: [
         "Conversion rate from organic search is low, so visitors arrive from Google but do not become leads or inquiries.",
         "Organic visitors do not convert, and the conversion rate from search traffic is poor compared with other channels.",
@@ -787,10 +643,6 @@ export const SEO_CONCERNS = {
       id: "seo.conversion.assist.content_not_assisting_sales",
       parent: "seo.conversion.assist",
       label: "Content not assisting sales",
-      gate: {
-        required_any: ["content", "blog", "articles", "guides", "resources"],
-        secondary_any: ["not", "doesn't", "does not", "low", "poor", "bad", "no leads", "no inquiries"]
-      },
       anchors: [
         "Our content does not assist sales, because blog and guide pages attract little qualified interest and rarely lead to inquiries.",
         "We publish helpful articles, but content is not generating leads or moving visitors toward contacting us for services.",

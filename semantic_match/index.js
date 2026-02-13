@@ -1,32 +1,53 @@
-// index.js (Semantic PRIMARY + BM25 SECONDARY; BM25 uses lemmatization+stemming)
-//
-// Updated to use the new model in:
-//   concerns/seo_concerns.js  ->  export const SEO_CONCERNS = { nodes: [...] }
+// index.js (Semantic PRIMARY + BM25 SECONDARY)
+// + Stopword stripping
+// + Proper lemmatizer (wink-lemmatizer)
+// + Semantic Canonicalization for BM25 synonyms (built with NO STEM; pairwise cosine clustering)
+// + BM25 stemming ENABLED (and applied carefully in the correct order)
 //
 // Model notes:
 // - Nodes are hierarchical (have id + parent + label)
-// - Leaf concerns have:
-//     - anchors: [ ... ]   (>=10, 15–30 words each)
-//     - gate: { required_any: [...], secondary_any: [...] }
-// - Non-leaf/theme nodes may have gate/clarify_question but NO anchors
+// - Leaf concerns have anchors
+// - Gates disabled: all leaf concerns considered
 //
-// Keyword gating:
-// - Remove domain_gate usage completely
-// - Candidate LEAF concerns must pass:
-//     matchAny(inputTokens, gate.required_any) AND matchAny(inputTokens, gate.secondary_any)
-// - Matching uses normalize + lemma + stem (tokenizeLex)
+// CRITICAL ORDERING (BM25):
+//   normalize → lemma → stopword strip → canonicalize → stem → final filters
 //
-// Adds fusion:
-// - Amplify when BOTH semantic and BM25 are high (synergy via sqrt(sem*bm25))
-// - De-amplify when they disagree (conflict penalty via |sem-bm25|)
+// CRITICAL ORDERING (Canonical map build):
+//   normalize → lemma → stopword strip → final filters   (NO STEM)
+//
+// CRITICAL ORDERING ("neutral tokenizer" used only for normalizeSemantic delta):
+//   normalize → lemma → minimal filters   (NO stopwords/canon/stem)
 
 import readline from "node:readline";
+import fs from "node:fs";
+import path from "node:path";
+
+import stopwordPkg from "stopword"; // robust across versions
+import Snowball from "snowball-stemmers";
+import lemmatizer from "wink-lemmatizer";
 
 import { CONFIG } from "./config.js";
 import { SEO_CONCERNS } from "./concerns/seo_concerns.js";
 import { cosine } from "./cosine.js";
 import { normalizeSemantic } from "./domain_normalize.js";
 import { buildSentenceEmbedder } from "./sent_embed.js";
+
+const stemmer = Snowball.newStemmer("english");
+
+// ------------------ Stopword compatibility ------------------
+// "stopword" package exports vary by version; normalize.
+const removeStopwords =
+  stopwordPkg?.removeStopwords ||
+  stopwordPkg?.default?.removeStopwords ||
+  stopwordPkg?.default ||
+  stopwordPkg;
+
+const ENG_STOPWORDS =
+  stopwordPkg?.eng ||
+  stopwordPkg?.default?.eng ||
+  stopwordPkg?.english ||
+  stopwordPkg?.default?.english ||
+  [];
 
 // ------------------ Helpers ------------------
 function clamp01(x) {
@@ -35,7 +56,8 @@ function clamp01(x) {
 }
 
 function help() {
-  console.log(`
+  console.log(
+    `
 Commands:
   (type any sentence)   rank concerns (semantic + BM25 hybrid; fusion in CONFIG.final_weights)
   :topk <n>             set top-k
@@ -43,15 +65,11 @@ Commands:
   :mingap <x>           set min gap threshold (0..1)
   :k <n>                set semantic anchor candidate K (top anchors considered)
   :w <a> <b>            set base weights live: a=semantic b=bm25 (normalized to sum=1)
-  :list                 list concerns + anchor counts + gate sizes
+  :list                 list concerns + anchor counts
   :exit                 quit
-`.trim());
+`.trim()
+  );
 }
-
-// Add this to index.js (minimal change):
-// If decision is AMBIGUOUS and top2 shares the same parent as top1,
-// return the THEME (parent) with top-2 children + a short clarifier.
-
 
 function decide(results, MIN_RELEVANCE, MIN_GAP) {
   if (!results?.length) return { label: "NO_CONCERNS", reason: "no results" };
@@ -59,20 +77,20 @@ function decide(results, MIN_RELEVANCE, MIN_GAP) {
 
   const top1 = results[0];
   const top2 = results[1];
-  const gap = top1.score - top2.score;
+  const gap = (top1?.score ?? 0) - (top2?.score ?? 0);
 
-  if (top1.score < MIN_RELEVANCE) {
+  if ((top1?.score ?? 0) < MIN_RELEVANCE) {
     return {
       label: "NON_CONCERN",
       gap,
-      reason: `top1 < min_relevance (${top1.score.toFixed(4)} < ${MIN_RELEVANCE})`
+      reason: `top1 < min_relevance (${(top1?.score ?? 0).toFixed(4)} < ${MIN_RELEVANCE})`,
     };
   }
   if (gap < MIN_GAP) {
     return {
       label: "AMBIGUOUS",
       gap,
-      reason: `gap < min_gap (${gap.toFixed(4)} < ${MIN_GAP})`
+      reason: `gap < min_gap (${gap.toFixed(4)} < ${MIN_GAP})`,
     };
   }
   return { label: "CONCERN", gap, reason: "passes thresholds" };
@@ -84,7 +102,7 @@ function isLeafNode(n) {
 }
 
 const ALL_NODES = Array.isArray(SEO_CONCERNS?.nodes) ? SEO_CONCERNS.nodes : [];
-const CONCERNS = ALL_NODES.filter(isLeafNode);
+const LEAF_CONCERNS = ALL_NODES.filter(isLeafNode);
 
 function buildNodeIndex(nodes) {
   const byId = new Map();
@@ -112,14 +130,16 @@ function collapseAmbiguousToTheme(results, decision) {
   const p1 = getParentId(top1.id);
   const p2 = getParentId(top2.id);
 
-  if (!p1 || p1 !== p2) return null; // only collapse siblings
+  if (!p1 || p1 !== p2) return null;
 
-  const parentNode = NODE_INDEX.get(p1);
   const themeId = p1;
+  const themeNode = NODE_INDEX.get(themeId);
 
-  // Prefer an existing clarify_question on the theme node if present
   const clarify =
-  `Both signals detected: ${getNodeLabel(top1.id)} and ${getNodeLabel(top2.id)}. We’ll treat this as ${getNodeLabel(themeId)}.`;
+    (themeNode?.clarify_question && String(themeNode.clarify_question)) ||
+    `Both signals detected: ${getNodeLabel(top1.id)} and ${getNodeLabel(top2.id)}. We’ll treat this as ${getNodeLabel(
+      themeId
+    )}.`;
 
   return {
     label: "THEME",
@@ -127,54 +147,55 @@ function collapseAmbiguousToTheme(results, decision) {
     theme_label: getNodeLabel(themeId),
     children: [
       { id: top1.id, label: getNodeLabel(top1.id), score: top1.score },
-      { id: top2.id, label: getNodeLabel(top2.id), score: top2.score }
+      { id: top2.id, label: getNodeLabel(top2.id), score: top2.score },
     ],
-    clarify
+    clarify,
   };
 }
 
-// ------------------ Keyword Gate (lemma + stem aligned) ------------------
-function tokensToSet(text) {
-  return new Set(tokenizeLex(text)); // uses normalize + lemma + stem
-}
+// ------------------ Lexical config ------------------
 
-function preprocessConcernKeywords(concern) {
-  const reqA = concern?.gate?.required_any || [];
-  const reqB = concern?.gate?.secondary_any || [];
-
-  concern._reqATokens = new Set(reqA.flatMap((k) => tokenizeLex(k)));
-  concern._reqBTokens = new Set(reqB.flatMap((k) => tokenizeLex(k)));
-}
-
-function keywordGate(inputRaw, concern) {
-  const inputTokens = tokensToSet(inputRaw);
-
-  const matchedA = [];
-  const matchedB = [];
-
-  for (const t of concern._reqATokens) {
-    if (inputTokens.has(t)) matchedA.push(t);
-  }
-  for (const t of concern._reqBTokens) {
-    if (inputTokens.has(t)) matchedB.push(t);
-  }
-
-  return {
-    pass: matchedA.length > 0 && matchedB.length > 0,
-    matched_required_any: matchedA,
-    matched_secondary_any: matchedB
-  };
-}
-
-// ------------------ BM25 preprocessing: normalize + lemma + stem ------------------
-
-// Keep domain tokens stable (do NOT lemma/stem)
+// Keep domain tokens stable (do NOT lemma/canonicalize/stem)
 const PROTECTED_TOKENS = new Set([
-  "ga4", "gtm", "gsc", "lcp", "fcp", "inp", "cls", "ttfb",
-  "ctr", "cpc", "cpa", "cpl", "roas", "cpm",
-  "http", "https", "ssl", "dns", "url", "urls", "serp", "sitemap",
-  "404", "500", "502", "503", "5xx", "4xx"
+  "ga4",
+  "gtm",
+  "gsc",
+  "lcp",
+  "fcp",
+  "inp",
+  "cls",
+  "ttfb",
+  "ctr",
+  "cpc",
+  "cpa",
+  "cpl",
+  "roas",
+  "cpm",
+  "http",
+  "https",
+  "ssl",
+  "dns",
+  "url",
+  "urls",
+  "serp",
+  "sitemap",
+  "404",
+  "500",
+  "502",
+  "503",
+  "5xx",
+  "4xx",
 ]);
+
+// Short but meaningful tokens we want to keep
+const KEEP_SHORT = new Set(["no", "not"]);
+
+// Stopwords: strip common words but KEEP negation
+const STOPWORDS = Array.isArray(ENG_STOPWORDS) ? ENG_STOPWORDS.filter((w) => w !== "no" && w !== "not") : [];
+function stripStopwords(tokens) {
+  if (typeof removeStopwords !== "function") return tokens; // safety fallback
+  return removeStopwords(tokens, STOPWORDS);
+}
 
 function normalizeLex(s) {
   return String(s || "")
@@ -184,130 +205,242 @@ function normalizeLex(s) {
     .trim();
 }
 
-// very small irregular lemma map (extend as needed)
-const IRREGULAR_LEMMA = new Map([
-  ["people", "person"],
-  ["men", "man"],
-  ["women", "woman"],
-  ["children", "child"],
-  ["indices", "index"],
-  ["indexes", "index"],
-  ["queries", "query"],
-  ["pages", "page"],
-  ["urls", "url"],
-  ["errors", "error"],
-  ["metrics", "metric"],
-  ["conversions", "conversion"],
-  ["clicks", "click"],
-  ["impressions", "impression"],
-  ["sessions", "session"],
-  ["leads", "lead"],
-  ["customers", "customer"],
-  ["campaigns", "campaign"],
-  ["rankings", "ranking"],
-  ["backlinks", "backlink"]
-]);
-
 function lemmatizeToken(tok) {
   if (!tok) return tok;
   if (PROTECTED_TOKENS.has(tok)) return tok;
-  const irr = IRREGULAR_LEMMA.get(tok);
-  if (irr) return irr;
 
-  if (tok.length > 4 && tok.endsWith("ies")) return tok.slice(0, -3) + "y";
-  if (
-    tok.length > 4 &&
-    (tok.endsWith("sses") || tok.endsWith("xes") || tok.endsWith("ches") || tok.endsWith("shes"))
-  ) return tok.slice(0, -2);
-
-  if (tok.length > 3 && tok.endsWith("s") && !tok.endsWith("ss")) return tok.slice(0, -1);
-
-  if (tok.length > 5 && tok.endsWith("ing")) {
-    const base = tok.slice(0, -3);
-    return base.endsWith(base.slice(-1) + base.slice(-1)) ? base.slice(0, -1) : base;
-  }
-
-  if (tok.length > 4 && tok.endsWith("ed")) {
-    const base = tok.slice(0, -2);
-    return base.endsWith(base.slice(-1) + base.slice(-1)) ? base.slice(0, -1) : base;
-  }
-
-  return tok;
+  // wink-lemmatizer: try noun → verb → adjective fallback
+  let t = lemmatizer.noun(tok);
+  if (t === tok) t = lemmatizer.verb(tok);
+  if (t === tok) t = lemmatizer.adjective(tok);
+  return t;
 }
 
-// Porter-lite stemmer (minimal but useful for marketing text)
-function stemToken(tok) {
-  if (!tok) return tok;
-  if (PROTECTED_TOKENS.has(tok)) return tok;
-  if (tok.length <= 3) return tok;
+function keepToken(tok) {
+  // keep >=3, or negation, or numbers, or status buckets like 4xx/5xx
+  return tok.length >= 3 || KEEP_SHORT.has(tok) || /^[0-9]+$/.test(tok) || /^[45]xx$/.test(tok);
+}
 
-  let t = tok;
+// ------------------ Semantic Canonicalization (NO STEM during build; pairwise comparisons) ------------------
 
-  const rules = [
-    ["ization", "ize"],
-    ["ational", "ate"],
-    ["fulness", "ful"],
-    ["ousness", "ous"],
-    ["iveness", "ive"],
-    ["tional", "tion"],
-    ["biliti", "ble"],
-    ["lessli", "less"],
-    ["entli", "ent"],
-    ["ation", "ate"],
-    ["ator", "ate"],
-    ["alism", "al"],
-    ["aliti", "al"],
-    ["ousli", "ous"],
-    ["iviti", "ive"],
-    ["enci", "ence"],
-    ["anci", "ance"],
-    ["izer", "ize"],
-    ["abli", "able"],
-    ["alli", "al"],
-    ["eli", "e"],
-    ["li", ""]
-  ];
+const SEMCAN = {
+  enabled: !!CONFIG?.lexical?.semantic_canonical_enabled,
+  threshold: CONFIG?.lexical?.semantic_canonical_threshold ?? 0.82,
+  min_df: CONFIG?.lexical?.semantic_canonical_min_df ?? 1,
+  cache_path: CONFIG?.lexical?.semantic_canonical_cache_path ?? "./.cache/seo_token_canon.json",
+};
 
-  for (const [suf, rep] of rules) {
-    if (t.length > suf.length + 2 && t.endsWith(suf)) {
-      t = t.slice(0, -suf.length) + rep;
-      return t;
+// runtime canonical map (token -> canonical token) in LEMMA SPACE (no stems)
+let CANON_MAP = null;
+
+function ensureDir(filePath) {
+  const dir = path.dirname(filePath);
+  if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+}
+
+function tryLoadCanonMap(cachePath) {
+  try {
+    if (!cachePath || !fs.existsSync(cachePath)) return null;
+    const j = JSON.parse(fs.readFileSync(cachePath, "utf8"));
+    if (!j || !j.map || typeof j.map !== "object") return null;
+    return new Map(Object.entries(j.map));
+  } catch {
+    return null;
+  }
+}
+
+function saveCanonMap(cachePath, canonMap, meta = {}) {
+  try {
+    if (!cachePath) return;
+    ensureDir(cachePath);
+    const obj = { meta, map: Object.fromEntries(canonMap.entries()) };
+    fs.writeFileSync(cachePath, JSON.stringify(obj, null, 2), "utf8");
+  } catch {
+    // ignore cache write errors
+  }
+}
+
+// Canon build tokenization: normalize → lemma → stopwords → keepToken  (NO STEM)
+function tokenizeLexForCanonical(s) {
+  const t = normalizeLex(s);
+  if (!t) return [];
+
+  let tokens = t
+    .split(" ")
+    .filter(Boolean)
+    .map((tok) => (CONFIG?.lexical?.lemmatization_enabled ? lemmatizeToken(tok) : tok))
+    .filter(Boolean);
+
+  tokens = stripStopwords(tokens);
+  tokens = tokens.filter(keepToken);
+  tokens = tokens.filter((tok) => !PROTECTED_TOKENS.has(tok));
+
+  return tokens;
+}
+
+function buildTokenDfFromAnchors(anchorDocs_) {
+  const df = new Map();
+  for (const d of anchorDocs_) {
+    const toks = tokenizeLexForCanonical(d.text);
+    for (const tok of new Set(toks)) df.set(tok, (df.get(tok) || 0) + 1);
+  }
+  return df;
+}
+
+function buildCanonicalVocab(anchorDocs_, { minDf }) {
+  const df = buildTokenDfFromAnchors(anchorDocs_);
+  const items = [];
+
+  for (const [tok, n] of df.entries()) {
+    if (!tok) continue;
+    if (n < (minDf ?? 1)) continue;
+    items.push({ tok, df: n });
+  }
+
+  items.sort((a, b) => b.df - a.df);
+
+  // NO CAP: cover all words in anchors after filtering
+  const vocab = items.map((x) => x.tok);
+  const dfMap = new Map(items.map((x) => [x.tok, x.df]));
+  return { vocab, dfMap };
+}
+
+function chooseCanonical(cluster, dfMap) {
+  // prefer highest df; tie-break shorter token
+  let best = cluster[0];
+  let bestDf = dfMap.get(best) || 0;
+
+  for (const t of cluster) {
+    const d = dfMap.get(t) || 0;
+    if (d > bestDf) {
+      best = t;
+      bestDf = d;
+    } else if (d === bestDf && t.length < best.length) {
+      best = t;
     }
   }
-
-  if (t.length > 5 && t.endsWith("ment")) return t.slice(0, -4);
-  if (t.length > 4 && t.endsWith("ness")) return t.slice(0, -4);
-  if (t.length > 4 && t.endsWith("able")) return t.slice(0, -4);
-  if (t.length > 4 && t.endsWith("ible")) return t.slice(0, -4);
-  if (t.length > 4 && t.endsWith("tion")) return t.slice(0, -3);
-  if (t.length > 4 && t.endsWith("sion")) return t.slice(0, -3);
-  if (t.length > 4 && t.endsWith("ing")) return t.slice(0, -3);
-  if (t.length > 3 && t.endsWith("ed")) return t.slice(0, -2);
-  if (t.length > 3 && t.endsWith("ly")) return t.slice(0, -2);
-
-  return t;
+  return best;
 }
 
-function preprocessToken(tok) {
-  let t = tok;
-  if (CONFIG?.lexical?.lemmatization_enabled) t = lemmatizeToken(t);
-  if (CONFIG?.lexical?.stemming_enabled) t = stemToken(t);
-  return t;
+async function buildSemanticCanonicalMap(sentEmbedder_, anchorDocs_, opts) {
+  const { threshold, minDf, cachePath } = opts;
+
+  const cached = tryLoadCanonMap(cachePath);
+  if (cached) return cached;
+
+  const { vocab, dfMap } = buildCanonicalVocab(anchorDocs_, { minDf });
+
+  // embed tokens (lemma-space, no stems)
+  const vecs = new Map();
+  for (const tok of vocab) vecs.set(tok, await sentEmbedder_.embed(tok));
+
+  // pairwise greedy clustering (O(n^2))
+  const used = new Set();
+  const canonMap = new Map();
+
+  for (let i = 0; i < vocab.length; i++) {
+    const t1 = vocab[i];
+    if (used.has(t1)) continue;
+
+    const cluster = [t1];
+    used.add(t1);
+
+    const v1 = vecs.get(t1);
+
+    for (let j = i + 1; j < vocab.length; j++) {
+      const t2 = vocab[j];
+      if (used.has(t2)) continue;
+
+      const v2 = vecs.get(t2);
+      const sim = clamp01(cosine(v1, v2));
+      if (sim >= threshold) {
+        cluster.push(t2);
+        used.add(t2);
+      }
+    }
+
+    const canon = chooseCanonical(cluster, dfMap);
+    for (const t of cluster) canonMap.set(t, canon);
+  }
+
+  saveCanonMap(cachePath, canonMap, {
+    threshold,
+    minDf,
+    vocabSize: vocab.length,
+    createdAt: new Date().toISOString(),
+  });
+
+  return canonMap;
 }
 
+// ------------------ BM25 tokenization (STEMMING ENABLED; correct order) ------------------
+//
+// normalize → lemma → stopword strip → canonicalize → stem → keepToken
+//
+// Notes:
+// - Canonical map is in lemma-space; apply BEFORE stemming.
+// - Stopword stripping must happen BEFORE stemming (otherwise stopwords may not match).
+//
 function tokenizeLex(s) {
   const t = normalizeLex(s);
   if (!t) return [];
 
-  return t
+  // 1) lemma
+  let tokens = t
     .split(" ")
     .filter(Boolean)
-    .map(preprocessToken)
-    .filter(Boolean)
-    // remove single-letter junk from contractions: "don t", "isn t"
-    .filter(tok => tok.length > 1 || /^[0-9]+$/.test(tok) || /^[45]xx$/.test(tok))
+    .map((tok) => (CONFIG?.lexical?.lemmatization_enabled ? lemmatizeToken(tok) : tok))
+    .filter(Boolean);
+
+  // 2) stopwords
+  tokens = stripStopwords(tokens);
+
+  // 3) keepToken pre-filter
+  tokens = tokens.filter(keepToken);
+
+  // 4) canonicalize (lemma-space)
+  if (SEMCAN.enabled && CANON_MAP) {
+    tokens = tokens.map((tok) => {
+      if (!tok) return tok;
+      if (PROTECTED_TOKENS.has(tok)) return tok;
+      if (KEEP_SHORT.has(tok)) return tok;
+      return CANON_MAP.get(tok) || tok;
+    });
+  }
+
+  // 5) stem (BM25 only)
+  if (CONFIG?.lexical?.stemming_enabled) {
+    tokens = tokens.map((tok) => {
+      if (!tok) return tok;
+      if (PROTECTED_TOKENS.has(tok)) return tok;
+      if (KEEP_SHORT.has(tok)) return tok;
+      return stemmer.stem(tok);
+    });
+  }
+
+  // 6) final keepToken
+  tokens = tokens.filter(Boolean).filter(keepToken);
+
+  return tokens;
 }
 
+// "Neutral" tokenizer used ONLY for buildBm25QueryFromFilteredOut()
+// Purpose: isolate the effect of normalizeSemantic() without stopwords/canon/stem.
+function tokenizeLexNeutral(s) {
+  const t = normalizeLex(s);
+  if (!t) return [];
+
+  let tokens = t
+    .split(" ")
+    .filter(Boolean)
+    .map((tok) => (CONFIG?.lexical?.lemmatization_enabled ? lemmatizeToken(tok) : tok))
+    .filter(Boolean);
+
+  // minimal filters only
+  tokens = tokens.filter(keepToken);
+
+  return tokens;
+}
 
 // ------------------ BM25 implementation ------------------
 function buildBm25(docs, { k1 = 1.2, b = 0.75 } = {}) {
@@ -369,25 +502,17 @@ function bm25To01(s) {
 // ------------------ Build anchor docs (LEAF only) ------------------
 function buildAnchorDocs() {
   const docs = [];
-  for (const c of CONCERNS) {
+  for (const c of LEAF_CONCERNS) {
     for (const a of c.anchors) docs.push({ concernId: c.id, text: a });
   }
   return docs;
 }
 
-const anchorDocs = buildAnchorDocs();
-const anchorSemTexts = anchorDocs.map((d) => normalizeSemantic(d.text));
-
-const bm25 = buildBm25(
-  anchorDocs.map((d, i) => ({ id: i, text: d.text, meta: d })),
-  { k1: CONFIG?.bm25?.k1 ?? 1.2, b: CONFIG?.bm25?.b ?? 0.75 }
-);
-
 // Semantic MAX pool
-function maxPoolToConcerns(anchorScores, anchorDocs, concerns) {
+function maxPoolToConcerns(anchorScores, anchorDocs_, concerns) {
   const best = new Map();
   for (let i = 0; i < anchorScores.length; i++) {
-    const cid = anchorDocs[i].concernId;
+    const cid = anchorDocs_[i].concernId;
     const s = anchorScores[i];
     const cur = best.get(cid);
     if (!cur || s > cur.score) best.set(cid, { score: s, idx: i });
@@ -397,12 +522,12 @@ function maxPoolToConcerns(anchorScores, anchorDocs, concerns) {
 }
 
 // Best BM25 per concern
-function bestBm25ByConcern(query, anchorDocs, concerns) {
+function bestBm25ByConcern(bm25_, query, anchorDocs_, concerns) {
   const best = new Map();
-  for (let i = 0; i < anchorDocs.length; i++) {
-    const sRaw = bm25.score(query, i);
+  for (let i = 0; i < anchorDocs_.length; i++) {
+    const sRaw = bm25_.score(query, i);
     if (sRaw <= 0) continue;
-    const cid = anchorDocs[i].concernId;
+    const cid = anchorDocs_[i].concernId;
     const cur = best.get(cid);
     if (!cur || sRaw > cur.score) best.set(cid, { score: sRaw, idx: i });
   }
@@ -410,20 +535,17 @@ function bestBm25ByConcern(query, anchorDocs, concerns) {
   return best;
 }
 
-// Filtered-out tokens BM25 query
+// Filtered-out tokens BM25 query (tokens removed by normalizeSemantic)
 function buildBm25QueryFromFilteredOut(inputRaw, qSemText) {
-  const rawTokens = new Set(tokenizeLex(inputRaw));
-  const semTokens = new Set(tokenizeLex(qSemText));
+  const rawTokens = new Set(tokenizeLexNeutral(inputRaw));
+  const semTokens = new Set(tokenizeLexNeutral(qSemText));
 
   const removed = [];
   for (const t of rawTokens) if (!semTokens.has(t)) removed.push(t);
 
-  // If the "filtered out" query is too short / too lossy, just use the normalized raw input.
   if (removed.length < 3) return normalizeLex(inputRaw);
-
   return removed.join(" ");
 }
-
 
 // ------------------ Fusion (synergy + conflict penalty) ------------------
 function normalizeWeights2(a, b) {
@@ -434,62 +556,219 @@ function normalizeWeights2(a, b) {
   return { a: x / sum, b: y / sum };
 }
 
+let W_SEM = CONFIG?.final_weights?.semantic ?? 0.85;
+let W_BM25 = CONFIG?.final_weights?.bm25 ?? 0.15;
+
 function normalizeBaseWeights() {
   const n = normalizeWeights2(W_SEM, W_BM25);
   W_SEM = n.a;
   W_BM25 = n.b;
 }
+normalizeBaseWeights();
 
 function fusedScore(sem01, bm2501) {
-  // base blend
   let s = W_SEM * sem01 + W_BM25 * bm2501;
 
-  // synergy (only helps when both are high)
-  const alpha = CONFIG?.fusion?.alpha ?? 0.20; // 0..1
+  const alpha = CONFIG?.fusion?.alpha ?? 0.2;
   const synergy = Math.sqrt(sem01 * bm2501);
 
-  // conflict penalty (hurts when they disagree)
-  const beta = CONFIG?.fusion?.beta ?? 0.15; // 0..1
+  const beta = CONFIG?.fusion?.beta ?? 0.15;
   const conflict = Math.abs(sem01 - bm2501);
 
   s = s + alpha * synergy - beta * conflict;
   return clamp01(s);
 }
 
-// ------------------ Preprocess gates ------------------
-for (const c of CONCERNS) preprocessConcernKeywords(c);
+// ------------------ LLM final adjudication (phi4-mini) ------------------
+async function ollamaChatJSON({ baseUrl, model, system, user, options, timeoutMs = 20000 }) {
+  const controller = new AbortController();
+  const t = setTimeout(() => controller.abort(), timeoutMs);
+
+  try {
+    const url = `${String(baseUrl || "").replace(/\/$/, "")}/api/chat`;
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        stream: false,
+        messages: [
+          { role: "system", content: system },
+          { role: "user", content: user },
+        ],
+        options: options ?? {},
+        format: "json",
+      }),
+    });
+
+    if (!res.ok) {
+      const msg = await res.text().catch(() => "");
+      throw new Error(`Ollama chat error: ${res.status} ${msg}`);
+    }
+
+    const data = await res.json();
+    const raw = data?.message?.content ?? "";
+    try {
+      return JSON.parse(raw);
+    } catch {
+      throw new Error(`LLM returned non-JSON: ${String(raw).slice(0, 200)}`);
+    }
+  } finally {
+    clearTimeout(t);
+  }
+}
+
+function buildCandidatePacket(results, nodeIndex) {
+  return results.map((r) => ({
+    id: r.id,
+    label: nodeIndex.get(r.id)?.label ?? r.id,
+    score: Number(r.score.toFixed(4)),
+    sem: Number(r.sem.toFixed(4)),
+    bm25: Number(r.bm25.toFixed(4)),
+    sem_anchor: r.sem_anchor,
+    bm25_anchor: r.bm25_anchor,
+  }));
+}
+
+function validateLLMChoice(out, allowIds) {
+  if (!out || typeof out !== "object") return { ok: false, reason: "no object" };
+
+  const decision = String(out.decision ?? "").toUpperCase();
+  const rationale = String(out.rationale ?? "").trim();
+
+  const wc = rationale ? rationale.split(/\s+/).filter(Boolean).length : 0;
+  if (wc < 5 || wc > 20) return { ok: false, reason: "bad rationale length" };
+
+  // enforce quotes exist in rationale (simple + cheap)
+  if (!/["'“”]/.test(rationale)) return { ok: false, reason: "rationale must quote 1-2 exact input phrases" };
+
+  if (decision === "CONCERN") {
+    const id = String(out.final_id ?? "");
+    if (!id || !allowIds.has(id)) return { ok: false, reason: "invalid final_id" };
+    return { ok: true, kind: "CONCERN", id, rationale };
+  }
+
+  if (decision === "AMBIGUOUS") {
+    return { ok: true, kind: "AMBIGUOUS", rationale };
+  }
+
+  return { ok: false, reason: "bad decision" };
+}
+
+async function llmFinalPick({ inputRaw, semText, resultsTopK, nodeIndex, config }) {
+  const llm = config?.llm_final;
+  if (!llm?.enabled) return { kind: "SKIP" };
+
+  const candidates = buildCandidatePacket(resultsTopK, nodeIndex); // leaf only
+  const allowIds = new Set(candidates.map((c) => c.id));
+
+  const system = `
+You are a strict SEO concern adjudicator (digital marketing / organic search).
+
+Pick the single best matching LEAF concern from the candidate IDs provided.
+Use ONLY those IDs. Do not invent IDs. Output JSON only. No extra text.
+
+Rules:
+- If a clear match exists: decision="CONCERN" and set final_id.
+- If unclear: decision="AMBIGUOUS" and set final_id="".
+- Respect contrast/negation (but, despite, unchanged, stable, even though etc).
+- rationale is REQUIRED (5-20 words) and must quote 1-2 exact input phrases.
+
+JSON:
+{"decision":"CONCERN|AMBIGUOUS","final_id":"<candidate_id_or_empty>","rationale":"<5-20 words, must quote 1-2 exact input phrases>"}
+`.trim();
+
+  const user = JSON.stringify(
+    {
+      input: inputRaw,
+      sem_text: semText,
+      candidates,
+      allow_ids: Array.from(allowIds),
+      hint: "Use contrast/negation correctly (e.g., 'rankings unchanged' should not select 'rankings_dropped').",
+    },
+    null,
+    2
+  );
+
+  const out = await ollamaChatJSON({
+    baseUrl: llm.ollama_url,
+    model: llm.model,
+    system,
+    user,
+    timeoutMs: llm.timeout_ms ?? 20000,
+    options: {
+      temperature: llm.temperature ?? 0,
+      top_p: llm.top_p ?? 1,
+      top_k: llm.top_k ?? 0,
+      num_predict: llm.num_predict ?? 220,
+    },
+  });
+
+  const validated = validateLLMChoice(out, allowIds);
+  if (!validated.ok) return { kind: "INVALID", reason: validated.reason, raw: out };
+  return validated;
+}
 
 // ------------------ Startup ------------------
-console.log("Concern Ranker (SEO model; Semantic PRIMARY + BM25 SECONDARY; Keyword gates; BM25 lemma+stem + fusion)");
+console.log(
+  "Concern Ranker (SEO model; Semantic PRIMARY + BM25 SECONDARY; Gates disabled; BM25 stem ENABLED + stopwords + lemma + semcanon + fusion)"
+);
 console.log(`Nodes in model: ${ALL_NODES.length}`);
-console.log(`Leaf Concerns:  ${CONCERNS.length}`);
+console.log(`Leaf Concerns:  ${LEAF_CONCERNS.length}`);
+
+const anchorDocs = buildAnchorDocs();
+const anchorSemTexts = anchorDocs.map((d) => normalizeSemantic(d.text));
 console.log(`Anchors:        ${anchorDocs.length}`);
 
 let TOPK = CONFIG?.decision?.topk ?? 5;
 let MIN_RELEVANCE = CONFIG?.decision?.min_relevance ?? 0.45;
 let MIN_GAP = CONFIG?.decision?.min_gap ?? 0.05;
+let STRONG_GAP = CONFIG?.decision?.strong_gap ?? 0.12;
 
 let K = CONFIG?.pipeline?.k_sem ?? 200;
 const MIN_SEM_CAND = CONFIG?.semantic?.min_candidate ?? 0.0;
 
-// Base weights (editable live)
-let W_SEM = CONFIG?.final_weights?.semantic ?? 0.85;
-let W_BM25 = CONFIG?.final_weights?.bm25 ?? 0.15;
-normalizeBaseWeights();
-
 console.log(`Semantic provider: ${CONFIG.semantic.provider} url=${CONFIG.semantic.ollama_url} model=${CONFIG.semantic.model}`);
-console.log(`K anchors: ${K} (0 = all)  min_sem_candidate=${MIN_SEM_CAND}`);
-console.log(`BM25: k1=${bm25.k1} b=${bm25.b} softnorm_k=${CONFIG?.bm25?.softnorm_k ?? 6.0}`);
-console.log(`Lexical: lemma=${!!CONFIG?.lexical?.lemmatization_enabled} stem=${!!CONFIG?.lexical?.stemming_enabled}`);
-console.log(`Weights: semantic=${W_SEM.toFixed(2)} bm25=${W_BM25.toFixed(2)} `);
-console.log(`Fusion: alpha=${CONFIG?.fusion?.alpha ?? 0.20} beta=${CONFIG?.fusion?.beta ?? 0.15}`);
-help();
 
-// Sentence embedder (Ollama / Nomic)
+// Sentence embedder (Ollama)
 const sentEmbedder = await buildSentenceEmbedder({
   ollamaUrl: CONFIG.semantic.ollama_url,
-  model: CONFIG.semantic.model
+  model: CONFIG.semantic.model,
 });
+
+// Canon map (NO STEM build), cached
+console.log(
+  `Lexical flags: lemma=${!!CONFIG?.lexical?.lemmatization_enabled} stem(BM25)=${!!CONFIG?.lexical?.stemming_enabled} stopwords=true semcanon=${SEMCAN.enabled}`
+);
+
+if (SEMCAN.enabled) {
+  console.log(`SemCanon: threshold=${SEMCAN.threshold} min_df=${SEMCAN.min_df} cache=${SEMCAN.cache_path}`);
+  console.log("\nBuilding semantic canonicalization map (NO STEM; pairwise comparisons)...\n");
+  CANON_MAP = await buildSemanticCanonicalMap(sentEmbedder, anchorDocs, {
+    threshold: SEMCAN.threshold,
+    minDf: SEMCAN.min_df,
+    cachePath: SEMCAN.cache_path,
+  });
+  console.log(`Canonical map ready. entries=${CANON_MAP.size}\n`);
+} else {
+  console.log("\nSemantic canonicalization: disabled\n");
+}
+
+// Build BM25 AFTER CANON_MAP is ready
+const bm25 = buildBm25(
+  anchorDocs.map((d, i) => ({ id: i, text: d.text, meta: d })),
+  { k1: CONFIG?.bm25?.k1 ?? 1.2, b: CONFIG?.bm25?.b ?? 0.75 }
+);
+
+normalizeBaseWeights();
+
+console.log(`K anchors: ${K} (0 = all)  min_sem_candidate=${MIN_SEM_CAND}`);
+console.log(`BM25: k1=${bm25.k1} b=${bm25.b} softnorm_k=${CONFIG?.bm25?.softnorm_k ?? 6.0}`);
+console.log(`Weights: semantic=${W_SEM.toFixed(2)} bm25=${W_BM25.toFixed(2)} `);
+console.log(`Fusion: alpha=${CONFIG?.fusion?.alpha ?? 0.2} beta=${CONFIG?.fusion?.beta ?? 0.15}`);
+console.log(`Decision: min_gap=${MIN_GAP} strong_gap=${STRONG_GAP}`);
+help();
 
 // Precompute anchor embeddings
 console.log("\nEmbedding all anchors (Nomic via Ollama)...\n");
@@ -498,11 +777,7 @@ for (const t of anchorSemTexts) anchorVecs.push(await sentEmbedder.embed(t));
 console.log("Ready.\n");
 
 function listConcerns() {
-  for (const c of CONCERNS) {
-    const a = Array.isArray(c?.gate?.required_any) ? c.gate.required_any.length : 0;
-    const b = Array.isArray(c?.gate?.secondary_any) ? c.gate.secondary_any.length : 0;
-    console.log(`${c.id}  |  anchors=${c.anchors.length}  |  gate.required_any=${a}  gate.secondary_any=${b}`);
-  }
+  for (const c of LEAF_CONCERNS) console.log(`${c.id}  |  anchors=${c.anchors.length}`);
 }
 
 // ------------------ CLI Loop ------------------
@@ -554,7 +829,9 @@ rl.on("line", async (line) => {
       const a = Number(parts[0]);
       const b = Number(parts[1]);
       if (Number.isFinite(a) && Number.isFinite(b) && a >= 0 && b >= 0) {
-        W_SEM = a; W_BM25 = b; normalizeBaseWeights();
+        W_SEM = a;
+        W_BM25 = b;
+        normalizeBaseWeights();
         console.log(`base weights set: semantic=${W_SEM.toFixed(2)} bm25=${W_BM25.toFixed(2)} (normalized)`);
       } else {
         console.log("Usage: :w <semantic> <bm25>   (both >= 0)");
@@ -568,19 +845,8 @@ rl.on("line", async (line) => {
     // BM25 query from tokens filtered out by normalizeSemantic()
     const qBm25Text = buildBm25QueryFromFilteredOut(inputRaw, qSemText);
 
-    // ------------------ Keyword gating (model gate) ------------------
-    const gateInfoById = new Map();
-    const gated = [];
-
-    for (const c of CONCERNS) {
-      const g = keywordGate(inputRaw, c);
-      gateInfoById.set(c.id, g);
-      if (g.pass) gated.push(c);
-    }
-
-    // If NOTHING passes gate, fall back to all concerns (so system still returns something)
-    const candidateConcerns = gated.length ? gated : CONCERNS;
-    const usedFallback = gated.length === 0;
+    // Gates disabled => consider all leaf concerns
+    const candidateConcerns = LEAF_CONCERNS;
 
     // Embed query
     const qVec = await sentEmbedder.embed(qSemText);
@@ -602,8 +868,8 @@ rl.on("line", async (line) => {
     }
 
     // Pool per concern (leaf)
-    const bestSem = maxPoolToConcerns(semAnchorScores, anchorDocs, CONCERNS);
-    const bestBm25 = bestBm25ByConcern(qBm25Text, anchorDocs, CONCERNS);
+    const bestSem = maxPoolToConcerns(semAnchorScores, anchorDocs, LEAF_CONCERNS);
+    const bestBm25 = bestBm25ByConcern(bm25, qBm25Text, anchorDocs, LEAF_CONCERNS);
 
     // Build results
     const resultsAll = candidateConcerns.map((c) => {
@@ -625,48 +891,107 @@ rl.on("line", async (line) => {
         bm25: bm25Score01,
         sem_anchor: idxSem >= 0 ? anchorDocs[idxSem].text : "",
         bm25_anchor: idxB >= 0 ? anchorDocs[idxB].text : "",
-        bm25_query: qBm25Text
+        bm25_query: qBm25Text,
       };
     });
 
-    const results = resultsAll.sort((a, b) => b.score - a.score).slice(0, TOPK);
+    const results = resultsAll.slice().sort((a, b) => b.score - a.score).slice(0, TOPK);
     const decision = decide(results, MIN_RELEVANCE, MIN_GAP);
+
+    const top1 = results[0];
+    const top2 = results[1];
+    const gap = (top1?.score ?? 0) - (top2?.score ?? 0);
+
+    const strongDeterministic = results.length >= 2 && gap >= STRONG_GAP;
+
+    const shouldCallLLM =
+      !!CONFIG?.llm_final?.enabled &&
+      !strongDeterministic &&
+      decision.label !== "NON_CONCERN";
+
+    let llmPick = null;
+    if (shouldCallLLM) {
+      try {
+        const rerankK = CONFIG?.llm_final?.rerank_topk ?? TOPK;
+        const topForLLM = resultsAll.slice().sort((a, b) => b.score - a.score).slice(0, rerankK);
+
+        llmPick = await llmFinalPick({
+          inputRaw,
+          semText: qSemText,
+          resultsTopK: topForLLM,
+          nodeIndex: NODE_INDEX,
+          config: CONFIG,
+        });
+      } catch (e) {
+        llmPick = { kind: "ERROR", reason: e?.message ?? String(e) };
+      }
+    }
 
     console.log(`\nInput: ${inputRaw}`);
     console.log(`SemText: ${qSemText}`);
     console.log(`BM25Query(filtered): ${qBm25Text || "(empty)"}`);
-    console.log(`KeywordGate: candidates=${candidateConcerns.length}/${CONCERNS.length} ${usedFallback ? "(fallback=ALL)" : ""}`);
+    console.log(`KeywordGate: disabled (candidates=${candidateConcerns.length}/${LEAF_CONCERNS.length})`);
     console.log(`Weights: semantic=${W_SEM.toFixed(2)} bm25=${W_BM25.toFixed(2)}`);
-    const themeCollapse = collapseAmbiguousToTheme(results, decision);
 
+    const themeCollapse = collapseAmbiguousToTheme(results, decision);
     if (themeCollapse) {
       console.log(`Decision: THEME (collapsed from AMBIGUOUS: siblings under ${themeCollapse.theme_id})`);
       console.log(`Theme: ${themeCollapse.theme_id}  (${themeCollapse.theme_label})`);
       console.log(
         `Children: ` +
-        `${themeCollapse.children[0].score.toFixed(4)} ${themeCollapse.children[0].id}, ` +
-        `${themeCollapse.children[1].score.toFixed(4)} ${themeCollapse.children[1].id}`
+          `${themeCollapse.children[0].score.toFixed(4)} ${themeCollapse.children[0].id}, ` +
+          `${themeCollapse.children[1].score.toFixed(4)} ${themeCollapse.children[1].id}`
       );
       console.log(`Clarifier: ${themeCollapse.clarify}`);
     } else {
       console.log(`Decision: ${decision.label} (${decision.reason})`);
     }
 
-    console.log(`Gap: ${(decision.gap ?? 0).toFixed(4)}\n`);
+    console.log(`Gap: ${(decision.gap ?? 0).toFixed(4)}  strong_gap=${STRONG_GAP.toFixed(4)}  strong=${strongDeterministic}\n`);
+
+    if (CONFIG?.llm_final?.enabled) {
+      if (strongDeterministic) {
+        console.log(`LLM Final: SKIPPED (strong deterministic gap)\n`);
+      } else if (llmPick) {
+        if (llmPick?.kind === "CONCERN") {
+          console.log(`LLM Final: CONCERN -> ${llmPick.id} (${getNodeLabel(llmPick.id)})  reason=${llmPick.rationale || ""}\n`);
+        } else if (llmPick?.kind === "AMBIGUOUS") {
+          console.log(`LLM Final: AMBIGUOUS  reason=${llmPick.rationale || ""}\n`);
+        } else if (llmPick?.kind === "INVALID") {
+          console.log(`LLM Final: INVALID (${llmPick.reason})\n`);
+        } else if (llmPick?.kind === "ERROR") {
+          console.log(`LLM Final: ERROR (${llmPick.reason})\n`);
+        } else {
+          console.log(`LLM Final: SKIP\n`);
+        }
+      }
+    }
+
+    // FINAL selection: apply llmPick if present
+    let finalLabel = decision.label;
+    let finalId = results[0]?.id ?? null;
+
+    if (llmPick?.kind === "CONCERN") {
+      finalLabel = "CONCERN";
+      finalId = llmPick.id;
+    } else if (llmPick?.kind === "AMBIGUOUS") {
+      finalLabel = "AMBIGUOUS";
+      finalId = null;
+    }
+
+    console.log(`FINAL: ${finalLabel}${finalId ? " -> " + finalId : ""}\n`);
 
     for (const r of results) {
-      const g = gateInfoById.get(r.id) || { pass: true, matched_required_any: [], matched_secondary_any: [] };
       console.log(
         `${r.score.toFixed(4)}  ${r.id}\n` +
-        `   gate_pass: ${g.pass}\n` +
-        `   gateA_match(tokens): ${g.matched_required_any.slice(0, 10).join(", ")}${g.matched_required_any.length > 10 ? " ..." : ""}\n` +
-        `   gateB_match(tokens): ${g.matched_secondary_any.slice(0, 10).join(", ")}${g.matched_secondary_any.length > 10 ? " ..." : ""}\n` +
-        `   sem_score:   ${r.sem.toFixed(4)}\n` +
-        `   sem_anchor:  ${r.sem_anchor}\n` +
-        `   bm25_score:  ${r.bm25.toFixed(4)}\n` +
-        `   bm25_anchor: ${r.bm25_anchor}`
+          `   gate_pass:   (disabled)\n` +
+          `   sem_score:   ${r.sem.toFixed(4)}\n` +
+          `   sem_anchor:  ${r.sem_anchor}\n` +
+          `   bm25_score:  ${r.bm25.toFixed(4)}\n` +
+          `   bm25_anchor: ${r.bm25_anchor}`
       );
     }
+
     console.log("");
   } catch (e) {
     console.error("Error:", e?.message ?? e);
