@@ -1,0 +1,42 @@
+[
+  {
+    "fromConcernId": "seo.visibility.organic_traffic_down",
+    "toConcernId": "seo.visibility.rankings_down",
+    "type": "RELATED_TO"
+  },
+  {
+    "fromConcernId": "seo.visibility.rankings_down",
+    "toConcernId": "seo.local.local_visibility_down",
+    "type": "RELATED_TO"
+  },
+  {
+    "fromConcernId": "seo.local.local_visibility_down",
+    "toConcernId": "seo.local.gbp_optimization_issue",
+    "type": "RELATED_TO"
+  },
+  {
+    "fromConcernId": "seo.conversion.seo_leads_down",
+    "toConcernId": "seo.conversion.traffic_but_low_conversions",
+    "type": "RELATED_TO"
+  },
+  {
+    "fromConcernId": "seo.technical.indexing_issue",
+    "toConcernId": "seo.technical.general_technical_issue",
+    "type": "RELATED_TO"
+  },
+  {
+    "fromConcernId": "seo.technical.site_speed_issue",
+    "toConcernId": "seo.technical.general_technical_issue",
+    "type": "RELATED_TO"
+  },
+  {
+    "fromConcernId": "seo.content.content_gap",
+    "toConcernId": "seo.content.content_quality_issue",
+    "type": "RELATED_TO"
+  },
+  {
+    "fromConcernId": "seo.authority.backlink_authority_weak",
+    "toConcernId": "seo.authority.competitor_backlinks_stronger",
+    "type": "RELATED_TO"
+  }
+]

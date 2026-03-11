@@ -1,0 +1,54 @@
+[
+  {
+    "concernId": "seo.visibility.organic_traffic_down",
+    "serviceIds": ["seo_audit", "keyword_ranking_analysis"]
+  },
+  {
+    "concernId": "seo.visibility.rankings_down",
+    "serviceIds": ["keyword_ranking_analysis", "seo_audit"]
+  },
+  {
+    "concernId": "seo.local.local_visibility_down",
+    "serviceIds": ["local_seo_audit", "gbp_optimization"]
+  },
+  {
+    "concernId": "seo.local.gbp_optimization_issue",
+    "serviceIds": ["gbp_optimization"]
+  },
+  {
+    "concernId": "seo.conversion.seo_leads_down",
+    "serviceIds": ["conversion_audit", "local_seo_audit"]
+  },
+  {
+    "concernId": "seo.conversion.traffic_but_low_conversions",
+    "serviceIds": ["conversion_audit"]
+  },
+  {
+    "concernId": "seo.technical.indexing_issue",
+    "serviceIds": ["technical_seo_audit"]
+  },
+  {
+    "concernId": "seo.technical.site_speed_issue",
+    "serviceIds": ["speed_optimization"]
+  },
+  {
+    "concernId": "seo.technical.general_technical_issue",
+    "serviceIds": ["technical_seo_audit"]
+  },
+  {
+    "concernId": "seo.content.content_gap",
+    "serviceIds": ["content_strategy"]
+  },
+  {
+    "concernId": "seo.content.content_quality_issue",
+    "serviceIds": ["content_refresh"]
+  },
+  {
+    "concernId": "seo.authority.backlink_authority_weak",
+    "serviceIds": ["backlink_strategy"]
+  },
+  {
+    "concernId": "seo.authority.competitor_backlinks_stronger",
+    "serviceIds": ["backlink_strategy"]
+  }
+]

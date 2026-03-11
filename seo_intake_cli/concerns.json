@@ -1,0 +1,80 @@
+[
+  {
+    "id": "seo.visibility.organic_traffic_down",
+    "label": "Organic traffic down",
+    "atomicSentence": "Organic search traffic has declined.",
+    "category": "visibility"
+  },
+  {
+    "id": "seo.visibility.rankings_down",
+    "label": "Rankings down",
+    "atomicSentence": "Important keyword rankings have dropped.",
+    "category": "visibility"
+  },
+  {
+    "id": "seo.local.local_visibility_down",
+    "label": "Local visibility down",
+    "atomicSentence": "Visibility in local search or map results has declined.",
+    "category": "local"
+  },
+  {
+    "id": "seo.local.gbp_optimization_issue",
+    "label": "GBP optimization issue",
+    "atomicSentence": "Google Business Profile is incomplete or poorly optimized.",
+    "category": "local"
+  },
+  {
+    "id": "seo.conversion.seo_leads_down",
+    "label": "SEO leads down",
+    "atomicSentence": "Leads or calls from organic search have declined.",
+    "category": "conversion"
+  },
+  {
+    "id": "seo.conversion.traffic_but_low_conversions",
+    "label": "Traffic but low conversions",
+    "atomicSentence": "Traffic exists but visitors are not converting.",
+    "category": "conversion"
+  },
+  {
+    "id": "seo.technical.indexing_issue",
+    "label": "Indexing issue",
+    "atomicSentence": "Important pages may not be indexed correctly.",
+    "category": "technical"
+  },
+  {
+    "id": "seo.technical.site_speed_issue",
+    "label": "Site speed issue",
+    "atomicSentence": "Slow page speed may be hurting SEO or user experience.",
+    "category": "technical"
+  },
+  {
+    "id": "seo.technical.general_technical_issue",
+    "label": "General technical SEO issue",
+    "atomicSentence": "Crawlability, metadata, canonical, redirect, or structured technical problems exist.",
+    "category": "technical"
+  },
+  {
+    "id": "seo.content.content_gap",
+    "label": "Content gap",
+    "atomicSentence": "The site lacks enough useful content for target topics.",
+    "category": "content"
+  },
+  {
+    "id": "seo.content.content_quality_issue",
+    "label": "Content quality issue",
+    "atomicSentence": "Existing content is weak, outdated, duplicated, or not satisfying search intent.",
+    "category": "content"
+  },
+  {
+    "id": "seo.authority.backlink_authority_weak",
+    "label": "Backlink authority weak",
+    "atomicSentence": "The site lacks strong backlink authority compared with competitors.",
+    "category": "authority"
+  },
+  {
+    "id": "seo.authority.competitor_backlinks_stronger",
+    "label": "Competitor backlinks stronger",
+    "atomicSentence": "Competitors have significantly stronger backlink profiles.",
+    "category": "authority"
+  }
+]

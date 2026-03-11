@@ -1,0 +1,12 @@
+[
+  { "serviceId": "seo_audit", "price": 500, "currency": "USD" },
+  { "serviceId": "keyword_ranking_analysis", "price": 300, "currency": "USD" },
+  { "serviceId": "local_seo_audit", "price": 400, "currency": "USD" },
+  { "serviceId": "gbp_optimization", "price": 350, "currency": "USD" },
+  { "serviceId": "technical_seo_audit", "price": 600, "currency": "USD" },
+  { "serviceId": "speed_optimization", "price": 450, "currency": "USD" },
+  { "serviceId": "content_strategy", "price": 500, "currency": "USD" },
+  { "serviceId": "content_refresh", "price": 400, "currency": "USD" },
+  { "serviceId": "backlink_strategy", "price": 550, "currency": "USD" },
+  { "serviceId": "conversion_audit", "price": 450, "currency": "USD" }
+]

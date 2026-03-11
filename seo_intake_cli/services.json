@@ -1,0 +1,52 @@
+[
+  {
+    "id": "seo_audit",
+    "label": "SEO Audit",
+    "description": "A general audit of organic search performance and opportunities."
+  },
+  {
+    "id": "keyword_ranking_analysis",
+    "label": "Keyword Ranking Analysis",
+    "description": "Analysis of keyword drops, opportunities, and competitor movement."
+  },
+  {
+    "id": "local_seo_audit",
+    "label": "Local SEO Audit",
+    "description": "Review of local search visibility, citations, and map presence."
+  },
+  {
+    "id": "gbp_optimization",
+    "label": "Google Business Profile Optimization",
+    "description": "Optimization of Google Business Profile fields and local signals."
+  },
+  {
+    "id": "technical_seo_audit",
+    "label": "Technical SEO Audit",
+    "description": "Review of indexing, crawlability, metadata, redirects, and technical issues."
+  },
+  {
+    "id": "speed_optimization",
+    "label": "Speed Optimization",
+    "description": "Performance improvements aimed at faster load times and better UX."
+  },
+  {
+    "id": "content_strategy",
+    "label": "Content Strategy",
+    "description": "Planning content topics, service pages, and topical coverage."
+  },
+  {
+    "id": "content_refresh",
+    "label": "Content Refresh",
+    "description": "Improving existing content for freshness, quality, and intent match."
+  },
+  {
+    "id": "backlink_strategy",
+    "label": "Backlink Strategy",
+    "description": "Planning authority-building and backlink improvement efforts."
+  },
+  {
+    "id": "conversion_audit",
+    "label": "Conversion Audit",
+    "description": "Review of pages and funnels to improve lead generation from traffic."
+  }
+]
