@@ -1,3 +1,5 @@
+// Author: Surya Muntha
+
 import chalk from "chalk";
 import Table from "cli-table3";
 
@@ -47,6 +49,7 @@ export function printDiscoverySummary(state, knowledgeGraph){
 
  console.log(table.toString());
 }
+
 
 export function printServiceSummary(state, graph){
     console.log(chalk.bold.cyan("\n\nService Summary\n"));

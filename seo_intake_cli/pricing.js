@@ -1,3 +1,4 @@
+// Author: Surya Muntha
 export function buildPriceItems(serviceIds, services, prices){
     return serviceIds.map(serviceId => {
         const service = services.find(s => s.id === serviceId);

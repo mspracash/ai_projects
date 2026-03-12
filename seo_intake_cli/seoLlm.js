@@ -1,3 +1,5 @@
+// Author: Surya Muntha
+
 import { ChatOllama } from "@langchain/ollama";
 
 export const seoModel = new ChatOllama({

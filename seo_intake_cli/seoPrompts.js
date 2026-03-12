@@ -1,3 +1,5 @@
+// Author: Surya Muntha
+
 export function buildSeoNormalizePrompt({ text }) {
   const cleanText = String(text ?? "").trim();
 

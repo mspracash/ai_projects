@@ -1,28 +1,36 @@
-import {StateGraph, START, END} from "@langchain/langgraph";
-import {intakeNode,mapServicesNode, priceServicesNode, summaryNode } from "./workFlowNodes.js";
-import { buildDiscoveryGraph } from "./discoveryGraph.js";
+// Author: Surya Muntha
+
+import { StateGraph, START, END } from "@langchain/langgraph";
 import { stateChannels } from "./state.js";
+import { buildDiscoveryGraph } from "./discoveryGraph.js";
+import { createWorkflowNodes } from "./workFlowNodes.js";
 
-export function buildRootGraph(deps){
-    const graph = new StateGraph({
-        channels: stateChannels
-    });
+export function buildRootGraph(deps) {
+  const discoveryGraph = buildDiscoveryGraph(deps);
 
-    const discoveryGraph = buildDiscoveryGraph(deps);
+  const {
+    intakeNode,
+    mapServicesNode,
+    priceServicesNode,
+    summaryNode
+  } = createWorkflowNodes(deps);
 
-    graph.addNode("intake", (state) => intakeNode(state, deps));
-    graph.addNode("discovery", (state) => discoveryGraph);
-    graph.addNode("mapServices", (state) => mapServicesNode(state, deps));
-    graph.addNode("priceServices", (state) => priceServicesNode(state, deps));
-    graph.addNode("summary", (state) => summaryNode(state, deps));
+  const rootGraph = new StateGraph({
+    channels: stateChannels
+  });
 
-    graph.addEdge(START, "intake");
-    graph.addEdge("intake", "discovery");
-    graph.addEdge("discovery", "mapServices");
-    graph.addEdge("mapServices","priceServices");
-    graph.addEdge("priceServices", "summary")
-    graph.addEdge("summary", END);
+  rootGraph.addNode("intake", (state) => intakeNode(state));
+  rootGraph.addNode("discoveryGraph", discoveryGraph);
+  rootGraph.addNode("mapServices", (state) => mapServicesNode(state, deps));
+  rootGraph.addNode("priceServices", (state) => priceServicesNode(state, deps));
+  rootGraph.addNode("summary", (state) => summaryNode(state, deps));
 
-    return graph.compile();
+  rootGraph.addEdge(START, "intake");
+  rootGraph.addEdge("intake", "discoveryGraph");
+  rootGraph.addEdge("discoveryGraph", "mapServices");
+  rootGraph.addEdge("mapServices", "priceServices");
+  rootGraph.addEdge("priceServices", "summary");
+  rootGraph.addEdge("summary", END);
+
+  return rootGraph.compile();
 }
-

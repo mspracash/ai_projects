@@ -1,3 +1,5 @@
+// Author: Surya Muntha
+
 export class KnowledgeGraph {
   constructor(services, prices, concernServiceMap, concernRelations, concernTree) {
     this.servicesById = new Map(services.map((s) => [s.id, s]));

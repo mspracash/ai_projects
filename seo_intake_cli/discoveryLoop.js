@@ -1,3 +1,5 @@
+// Author: Surya Muntha
+
 import prompts from "prompts";
 import ora from "ora";
 import chalk from "chalk";

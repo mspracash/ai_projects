@@ -1,3 +1,5 @@
+// Author: Surya Muntha
+
 export const initialState = {
     phase: "intake",
 
