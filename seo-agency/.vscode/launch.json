@@ -15,7 +15,7 @@
             "name": "Python Debugger: Module",
             "type": "debugpy",
             "request": "launch",
-            "module": "retrieval.search"
+            "module": "tests.test_search"
         }
     ]
 }
