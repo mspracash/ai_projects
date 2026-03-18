@@ -36,6 +36,7 @@ def build_index():
     metadata = []
 
     for chunk in chunks:
+        print(chunk["chunk_id"])
         vector = embed(chunk["text"])
         embeddings.append(vector)
         metadata.append(chunk)

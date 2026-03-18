@@ -8,5 +8,5 @@ CHUNKS_PATH = STORAGE_DIR / "chunks.jsonl"
 FAISS_PATH = STORAGE_DIR/"faiss.index"
 META_PATH = STORAGE_DIR/"chunk_metadata.pkl"
 OLLAMA_URL = "http://localhost:11434/api/embeddings"
-MODEL = "nomic-embed-text"
+EMBED_MODEL = "nomic-embed-text"
 

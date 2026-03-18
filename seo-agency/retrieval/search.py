@@ -4,13 +4,12 @@ import requests
 import faiss
 import numpy as np
 
-from retrieval.config import STORAGE_DIR, FAISS_PATH, META_PATH, MODEL, OLLAMA_URL
+from retrieval.config import STORAGE_DIR, FAISS_PATH, META_PATH, EMBED_MODEL, OLLAMA_URL
 
 def embed(text:str):
-    response = requests.post(OLLAMA_URL, json={"model": MODEL, "prompt": text})
+    response = requests.post(OLLAMA_URL, json={"model": EMBED_MODEL, "prompt": text})
     response.raise_for_status()
     data = response.json()
-    print(data)
     return data["embedding"]
 
 def load_index():
@@ -22,13 +21,9 @@ def load_index():
 
 def search(query: str, k:int =5):
     index, metadata = load_index()
-    print("index total:", index.ntotal)
-    print("metadata count:", len(metadata))
     query_vector = np.array([embed(query)], dtype="float32")
+    faiss.normalize_L2(query_vector)
     scores, indices = index.search(query_vector, k)
-    print("query_vector shape:", query_vector.shape)
-    print("raw scores:", scores)
-    print("raw indices:", indices)
     results = []
 
     for score, idx in zip(scores[0], indices[0]):
