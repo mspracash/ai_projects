@@ -4,7 +4,7 @@ import asyncio
 import copy
 
 from logger import print_discovery_state
-from models import DISCOVERY_AREAS, FIELD_ORDER, AREA_FIELDS, OPTIONAL_FIELD_ORDER
+from models import DISCOVERY_AREAS, FIELD_ORDER, AREA_FIELDS
 from ollama_client import OllamaClient
 from prompts import (
     closing_prompt,
@@ -22,35 +22,21 @@ from xml_parser import (
 )
 
 
-
-
 class InterviewEngine:
     def __init__(self):
         self.llm = OllamaClient()
         self.discovery_areas = copy.deepcopy(DISCOVERY_AREAS)
-
-    def is_decline_response(self, text):
-        value = text.strip().lower()
-        return value in {
-            "declined",
-            "decline",
-            "skip",
-            "skip it",
-            "not now",
-            "later",
-            "we can discuss later",
-            "discuss later",
-            "i don't want to provide it",
-            "i prefer not to share",
-        }
+        self.last_question = ""
 
     def say_status(self, text):
         print(f"\nLupa: {text}")
 
-
     def choose_next_field(self):
-        for area_name, field_name in FIELD_ORDER + OPTIONAL_FIELD_ORDER:
-            value = extract_field(self.discovery_areas[area_name], field_name)
+        for area_name, field_name in FIELD_ORDER:
+            value = extract_field(
+                self.discovery_areas[area_name],
+                field_name
+            )
 
             if field_is_declined(value):
                 continue
@@ -125,12 +111,11 @@ class InterviewEngine:
                 )
 
     def update_from_customer_message(self, customer_message):
-        current_area, current_field = self.choose_next_field()
-
         raw = self.llm.generate(
             multi_field_update_prompt(
                 discovery_areas=self.discovery_areas,
                 customer_message=customer_message,
+                last_question=self.last_question,
             )
         )
 
@@ -148,10 +133,10 @@ class InterviewEngine:
         )
 
         return f"""
-            <audit_discovery>
-            {sections}
-            </audit_discovery>
-            """.strip()
+<audit_discovery>
+{sections}
+</audit_discovery>
+""".strip()
 
     def create_next_response(self, done):
         if done:
@@ -160,6 +145,9 @@ class InterviewEngine:
                     self.build_final_xml()
                 )
             )
+
+            print("\nRAW CLOSING:")
+            print(raw)
 
             return extract_response(raw) or (
                 "Great, I have enough context to prepare your audit."
@@ -178,15 +166,17 @@ class InterviewEngine:
         print("\nRAW QUESTION:")
         print(raw)
 
-
         return extract_response(raw) or (
             f"Could you tell me your {next_field.replace('_', ' ')}?"
-            )
+        )
+
     async def run_async(self):
         question = (
             "Great, let's get started. "
             "Tell me a little about you and what you're working on."
         )
+
+        self.last_question = question
 
         while True:
             print(f"\nLupa: {question}")
@@ -196,17 +186,9 @@ class InterviewEngine:
                 print("\nLupa: No problem. We can stop here.")
                 break
 
-            if self.is_decline_response(user_input):
-                area, field = self.choose_next_field()
-                if area and field:
-                    self.discovery_areas[area] = set_field(
-                        self.discovery_areas[area],
-                        field,
-                        "DECLINED"
-                    )
-            else:
-                self.say_status("Let me organize what I heard.")
-                self.update_from_customer_message(user_input)
+            self.say_status("Let me organize what I heard.")
+
+            self.update_from_customer_message(user_input)
 
             missing_fields = self.get_missing_required_fields()
             done = self.python_completion_check()
@@ -217,6 +199,8 @@ class InterviewEngine:
                 )
 
             say = self.create_next_response(done)
+
+            self.last_question = say
 
             print_discovery_state(
                 discovery_areas=self.discovery_areas,
