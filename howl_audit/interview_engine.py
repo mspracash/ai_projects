@@ -12,10 +12,9 @@ from prompts import (
     multi_field_update_prompt,
 )
 from xml_parser import (
-    extract_child_fields,
+    extract_area_updates,
     extract_field,
     extract_response,
-    extract_simple_tag,
     field_has_value,
     field_is_declined,
     set_field,
@@ -67,17 +66,12 @@ class InterviewEngine:
         next_area, next_field = self.choose_next_field()
         return next_area is None and next_field is None
 
-    def merge_updates_xml(self, updates_xml):
-        for area_name in self.discovery_areas.keys():
-            area_updates = extract_simple_tag(
-                updates_xml,
-                area_name
-            )
+    def merge_updates_xml(self, raw_updates_xml):
+        updates = extract_area_updates(raw_updates_xml)
 
-            if not area_updates:
+        for area_name, fields in updates.items():
+            if area_name not in self.discovery_areas:
                 continue
-
-            fields = extract_child_fields(area_updates)
 
             for field_name, value in fields.items():
                 value = value.strip()
@@ -122,10 +116,8 @@ class InterviewEngine:
         print("\nRAW FIELD UPDATES:")
         print(raw)
 
-        updates_xml = extract_simple_tag(raw, "updates")
-
-        if updates_xml:
-            self.merge_updates_xml(updates_xml)
+        if raw:
+            self.merge_updates_xml(raw)
 
     def build_final_xml(self):
         sections = "\n\n".join(

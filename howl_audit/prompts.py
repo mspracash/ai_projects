@@ -18,8 +18,18 @@ def multi_field_update_prompt(
 You are maintaining and refining customer discovery XML.
 
 CONTEXT
-A digital marketing consultant is interviewing a prospective client to
-learn about the customer, the business, and its marketing needs.
+You are updating structured customer discovery XML.
+
+A customer is answering discovery questions.
+Extract only facts about:
+- the customer;
+- the customer's business;
+- the customer's location;
+- the customer's needs, goals, problems, or preferences.
+
+Do not treat the interviewer, assistant, agency, platform, tool, or product as the customer's business.
+Do not copy examples, instructions, or background context into the XML.
+Use only the customer's message and existing XML.
 
 CURRENT DISCOVERY XML
 {discovery_areas}
@@ -53,6 +63,7 @@ RULES
 - The current XML may be used to refine and improve existing values.
 - The last question is context only.
 - Never invent, guess, or assume information.
+- Never extract information from the prompt instructions.
 
 2. What to Return
 Return information only if it is:
@@ -84,29 +95,10 @@ New tag names must be:
 - descriptive;
 - reusable.
 
-Good:
-<target_industry>
-<lead_source>
-<marketing_goal>
-
-Bad:
-<restaurants_and_dentists>
-<customer_said_they_need_more_leads>
-
 6. Atomic Values
 - One XML tag should contain one fact or idea.
-- If a value contains multiple independent ideas, split it into
-  repeated tags.
+- If a value contains multiple independent ideas, split it into repeated tags.
 - Prefer short, direct values.
-
-Good:
-<marketing_goal>increase brand awareness in NJ locality</marketing_goal>
-<marketing_goal>make it easy for clients to find us online</marketing_goal>
-
-Bad:
-<marketing_goals>
-increase brand awareness and make it easy for clients to find us online
-</marketing_goals>
 
 7. Exact Preservation
 Preserve these exactly as provided:
@@ -123,12 +115,8 @@ Do not rewrite or normalize them.
 8. Refinement Rules
 - Prefer improving existing XML over simply adding new values.
 - Keep useful information whenever possible.
-- Remove information only if it is:
-  - duplicated;
-  - clearly incorrect; or
-  - replaced by better information.
-- The XML should become more accurate, more complete, and more organized
-  after every customer message.
+- Remove information only if it is duplicated, clearly incorrect, or replaced by better information.
+- The XML should become more accurate, complete, and organized after every message.
 
 9. Output
 - Return only updated or improved XML.
