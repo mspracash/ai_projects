@@ -1,46 +1,61 @@
 # interview_engine.py
 
 import asyncio
-import copy
+import json
 
 from logger import print_discovery_state
-from models import DISCOVERY_AREAS, FIELD_ORDER, AREA_FIELDS
 from ollama_client import OllamaClient
 from prompts import (
     closing_prompt,
     field_question_prompt,
     multi_field_update_prompt,
 )
-from xml_parser import (
-    extract_area_updates,
-    extract_field,
-    extract_response,
-    field_has_value,
-    field_is_declined,
-    set_field,
+from models import (
+    FIELD_ORDER,
+    ExtractResponse,
+    QuestionResponse,
+    ClosingResponse,
 )
 
 
 class InterviewEngine:
     def __init__(self):
         self.llm = OllamaClient()
-        self.discovery_areas = copy.deepcopy(DISCOVERY_AREAS)
+        self.discovery_state = {
+            "customer": {},
+            "business": {},
+        }
         self.last_question = ""
 
     def say_status(self, text):
         print(f"\nLupa: {text}")
 
+    def field_has_value(self, value):
+        return value is not None and str(value).strip() != ""
+
+    def field_is_declined(self, value):
+        if not value:
+            return False
+
+        return str(value).strip().lower() in {
+            "declined",
+            "not provided",
+            "n/a",
+            "na",
+            "none",
+        }
+
+    def get_field(self, area_name, field_name):
+        return self.discovery_state.get(area_name, {}).get(field_name)
+
     def choose_next_field(self):
         for area_name, field_name in FIELD_ORDER:
-            value = extract_field(
-                self.discovery_areas[area_name],
-                field_name
-            )
+            value = self.get_field(area_name, field_name)
 
-            if field_is_declined(value):
+            if self.field_is_declined(value):
                 continue
 
-            if not field_has_value(value):
+            if not self.field_has_value(value):
                 return area_name, field_name
 
         return None, None
@@ -49,15 +64,12 @@ class InterviewEngine:
         missing = {}
 
         for area_name, field_name in FIELD_ORDER:
-            value = extract_field(
-                self.discovery_areas[area_name],
-                field_name
-            )
+            value = self.get_field(area_name, field_name)
 
-            if field_is_declined(value):
+            if self.field_is_declined(value):
                 continue
 
-            if not field_has_value(value):
+            if not self.field_has_value(value):
                 missing.setdefault(area_name, []).append(field_name)
 
         return missing
@@ -66,99 +78,133 @@ class InterviewEngine:
         next_area, next_field = self.choose_next_field()
         return next_area is None and next_field is None
 
-    def merge_updates_xml(self, raw_updates_xml):
-        updates = extract_area_updates(raw_updates_xml)
+    def merge_updates(self, extract_result: ExtractResponse):
+        updates = extract_result.model_dump(exclude_none=True)
 
-        for area_name, fields in updates.items():
-            if area_name not in self.discovery_areas:
+        for area_name in ["customer", "business"]:
+            area_updates = updates.get(area_name, {})
+
+            if not area_updates:
                 continue
 
-            for field_name, value in fields.items():
-                value = value.strip()
+            self.discovery_state.setdefault(area_name, {})
 
-                if not value:
+            for field_name, value in area_updates.items():
+                if field_name == "uncategorized":
+                    if value:
+                        existing = self.discovery_state[area_name].get(
+                            "uncategorized",
+                            [],
+                        )
+
+                        if not isinstance(existing, list):
+                            existing = [existing]
+
+                        self.discovery_state[area_name]["uncategorized"] = (
+                            existing + value
+                        )
+
                     continue
 
-                if field_name in AREA_FIELDS[area_name]:
-                    target_field = field_name
-                    target_value = value
-                else:
-                    target_field = "uncategorized"
+                if not self.field_has_value(value):
+                    continue
 
-                    existing = extract_field(
-                        self.discovery_areas[area_name],
-                        target_field
-                    ).strip()
-
-                    new_item = f"{field_name}: {value}"
-
-                    target_value = (
-                        f"{existing}; {new_item}"
-                        if existing
-                        else new_item
-                    )
-
-                self.discovery_areas[area_name] = set_field(
-                    self.discovery_areas[area_name],
-                    target_field,
-                    target_value
-                )
+                self.discovery_state[area_name][field_name] = value
 
     def update_from_customer_message(self, customer_message):
-        raw = self.llm.generate(
+        result = self.llm.generate(
             multi_field_update_prompt(
-                discovery_areas=self.discovery_areas,
+                discovery_state=self.discovery_state,
                 customer_message=customer_message,
                 last_question=self.last_question,
-            )
+            ),
+            response_model=ExtractResponse,
         )
 
-        print("\nRAW FIELD UPDATES:")
-        print(raw)
+        print("\nSTRUCTURED FIELD UPDATES:")
+        print(result.model_dump_json(indent=2))
 
-        if raw:
-            self.merge_updates_xml(raw)
+        self.merge_updates(result)
 
     def build_final_xml(self):
-        sections = "\n\n".join(
-            self.discovery_areas.values()
+        customer = self.discovery_state.get("customer", {})
+        business = self.discovery_state.get("business", {})
+
+        def tag(name, value):
+            if value is None:
+                value = ""
+
+            if isinstance(value, list):
+                value = "; ".join(str(v) for v in value if v)
+
+            return f"  <{name}>{value}</{name}>"
+
+        customer_xml = "\n".join(
+            [
+                "<customer>",
+                tag("name", customer.get("name")),
+                tag("role", customer.get("role")),
+                tag("email", customer.get("email")),
+                tag("phone", customer.get("phone")),
+                tag("responsibilities", customer.get("responsibilities")),
+                tag("uncategorized", customer.get("uncategorized", [])),
+                "</customer>",
+            ]
+        )
+
+        business_xml = "\n".join(
+            [
+                "<business>",
+                tag("name", business.get("name")),
+                tag("description", business.get("description")),
+                tag("website", business.get("website")),
+                tag("address", business.get("address")),
+                tag("marketing_goals", business.get("marketing_goals")),
+                tag("products", business.get("products")),
+                tag("services", business.get("services")),
+                tag("customers", business.get("customers")),
+                tag("challenges", business.get("challenges")),
+                tag("uncategorized", business.get("uncategorized", [])),
+                "</business>",
+            ]
         )
 
         return f"""
 <audit_discovery>
-{sections}
+{customer_xml}
+
+{business_xml}
 </audit_discovery>
 """.strip()
 
     def create_next_response(self, done):
         if done:
-            raw = self.llm.generate(
-                closing_prompt(
-                    self.build_final_xml()
-                )
+            result = self.llm.generate(closing_prompt(self.build_final_xml()),
+            response_model=ClosingResponse,
             )
 
-            print("\nRAW CLOSING:")
-            print(raw)
+            print("\nSTRUCTURED CLOSING:")
+            print(result.model_dump_json(indent=2))
 
-            return extract_response(raw) or (
+            return result.say or (
                 "Great, I have enough context to prepare your audit."
             )
 
         next_area, next_field = self.choose_next_field()
 
-        raw = self.llm.generate(
+        result = self.llm.generate(
             field_question_prompt(
-                discovery_areas=self.discovery_areas,
+                discovery_state=self.discovery_state,
                 next_area=next_area,
                 next_field=next_field,
-            )
+            ),
+            response_model=QuestionResponse,
         )
 
-        print("\nRAW QUESTION:")
-        print(raw)
+        print("\nSTRUCTURED QUESTION:")
+        print(result.model_dump_json(indent=2))
 
-        return extract_response(raw) or (
+        return result.question or (
             f"Could you tell me your {next_field.replace('_', ' ')}?"
         )
 
@@ -195,7 +241,7 @@ class InterviewEngine:
             self.last_question = say
 
             print_discovery_state(
-                discovery_areas=self.discovery_areas,
+                discovery_areas=self.discovery_state,
                 missing_fields=missing_fields,
                 complete=done,
                 next_response=say,

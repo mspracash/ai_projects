@@ -1,70 +1,48 @@
 # models.py
 
-AREA_FIELDS = {
-    "customer": [
-        "name",
-        "role",
-        "email",
-        "phone",
-        "responsibilities",
-        "uncategorized",
-    ],
-    "business": [
-        "name",
-        "description",
-        "website",
-        "address",
-        "marketing_goals",
-        "products",
-        "services",
-        "customers",
-        "challenges",
-        "uncategorized",
-    ],
-}
+from typing import Optional, List
+from pydantic import BaseModel, Field
 
-DISCOVERY_AREAS = {
-    "customer": """
-<customer>
-  <name></name>
-  <role></role>
-  <email></email>
-  <phone></phone>
-  <responsibilities></responsibilities>
-  <uncategorized></uncategorized>
-</customer>
-""".strip(),
 
-    "business": """
-<business>
-  <name></name>
-  <description></description>
-  <website></website>
-  <address></address>
-  <marketing_goals></marketing_goals>
-  <products></products>
-  <services></services>
-  <customers></customers>
-  <challenges></challenges>
-  <uncategorized></uncategorized>
-</business>
-""".strip(),
-}
+class CustomerUpdate(BaseModel):
+    name: Optional[str] = None
+    role: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    responsibilities: Optional[str] = None
+    uncategorized: List[str] = Field(default_factory=list)
 
+
+class BusinessUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    website: Optional[str] = None
+    address: Optional[str] = None
+    marketing_goals: Optional[str] = None
+    products: Optional[str] = None
+    services: Optional[str] = None
+    customers: Optional[str] = None
+    challenges: Optional[str] = None
+    uncategorized: List[str] = Field(default_factory=list)
+
+
+class ExtractResponse(BaseModel):
+    customer: CustomerUpdate = Field(default_factory=CustomerUpdate)
+    business: BusinessUpdate = Field(default_factory=BusinessUpdate)
+    summary: str = ""
+    newly_captured_fields: List[str] = Field(default_factory=list)
+    confidence: float = Field(default=0.0, ge=0.0, le=1.0)
+
+class QuestionResponse(BaseModel):
+    question: str = ""
+
+
+class ClosingResponse(BaseModel):
+    say: str = ""
 
 REQUIRED_FIELDS = {
-    "customer": [
-        "name",
-        "role",
-        "email",
-        "phone",
-    ],
-    "business": [
-        "name",
-        "description",
-        "address",
-        "marketing_goals",
-    ],
+    "customer": ["name", "role", "email", "phone"],
+    "business": ["name", "description", "address", "marketing_goals"],
 }
 
 FIELD_LABELS = {
@@ -72,11 +50,9 @@ FIELD_LABELS = {
     ("customer", "role"): "customer's role or title",
     ("customer", "email"): "customer's email address",
     ("customer", "phone"): "customer's phone number",
-
     ("business", "name"): "business name",
     ("business", "description"): "what the business does",
     ("business", "marketing_goals"): "marketing goals or desired outcomes",
-
     ("business", "website"): "business website URL",
     ("business", "address"): "business address",
 }
